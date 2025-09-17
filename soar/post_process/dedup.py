@@ -70,7 +70,23 @@ def get_deduplicate_output_one_task(task):
             dic_unique_output[list_out_str] = result
     return list(dic_unique_output.values())
 
+def rm_exact_code(list_resp):
+    """remove exact duplicate code"""
+    duplicate_indices = []
+    list_codes = [resp["code"].strip() for resp in list_resp]
+    # Only check each pair once (upper triangle)
+    list_unique_code=[]
+    for i in range(len(list_codes)):
+        if list_codes[i] not in list_unique_code:
+            list_unique_code.append(list_codes[i])
+        else:
+            duplicate_indices.append(i)
 
+    # Get unique duplicates
+    duplicate_indices = list(set(duplicate_indices))
+    unique_idx_resp = [idx for idx in range(len(list_codes)) if idx not in duplicate_indices]
+    list_resp = [list_resp[i] for i in unique_idx_resp]
+    return list_resp
 
 def filter(list_resp,list_embed):
     filtered_list_resp = []
@@ -96,6 +112,17 @@ def filter(list_resp,list_embed):
     filtered_list_embed += [list_embed_incorrect[id_resp] for id_resp in list_id_keep_incorrect]
 
     return filtered_list_resp, filtered_list_embed
+
+def dedup_incorrect_task_output(list_resp):
+    """dedup based on output grid"""
+    # first remove exact code duplicates
+    list_is_incorrect = [id_resp for id_resp,resp in enumerate(list_resp) if not all(resp["correct_test_input"] + resp["correct_train_input"])]
+    list_resp_incorrect = [list_resp[id_resp] for id_resp in list_is_incorrect]
+    list_id_keep_incorrect = get_deduplicate_output_one_task(list_resp_incorrect)
+    list_resp_incorrect = [list_resp_incorrect[id_resp] for id_resp in list_id_keep_incorrect]
+    list_correct = [resp for resp in list_resp if all(resp["correct_test_input"] + resp["correct_train_input"])]
+    list_all_resp = list_correct + list_resp_incorrect
+    return list_all_resp
 
 all_resp = {k: [] for k in list_k}
 all_embed = {k: [] for k in list_k}
@@ -123,6 +150,8 @@ for k in tqdm(list_k):
         print(f"No responses for {k}, skipping.")
         continue
     # compute embeddings for the responses
+    list_resp = rm_exact_code(list_resp)
+    list_resp = dedup_incorrect_task_output(list_resp)
     list_code = [resp["code"].strip() for resp in list_resp]
     list_feat = model.encode(list_code,batch_size=1,transfer_to_cpu=True,convert_to_numpy=True)#encode_in_batches(model, list_code)
     # Normalize the vectors (required for cosine similarity)
