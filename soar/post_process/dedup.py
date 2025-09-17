@@ -17,14 +17,18 @@ for i in range(20):
 parser.add_argument("--path_save", type=str)
 parser.add_argument("--path_embed_model", type=str, default="/home/flowers/work/hf/CodeRankEmbed")
 parser.add_argument("--arc2", action=argparse.BooleanOptionalAction, help="arc 2",default=False)
+parser.add_argument("--split", type=str, help="split train val",default="train")
 
 args = parser.parse_args()
 
 train_data, val_data, test_data = get_dataset(args.base_path,arc_2=args.arc2)
+
 all_data = train_data
+if args.split == "val":
+    all_data = val_data
 # all_data.update(val_data)
 
-list_k = list(train_data.keys())
+list_k = list(all_data.keys())
 
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer(args.path_embed_model, trust_remote_code=True)
