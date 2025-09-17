@@ -18,6 +18,7 @@ parser.add_argument("--sample_mode", type=str, default="diverse", help="[diverse
 parser.add_argument("--use_prev_gen",action=argparse.BooleanOptionalAction ,default=False,help="merge solution of this generation with previous generation")
 parser.add_argument("--arc2", action=argparse.BooleanOptionalAction, help="arc 2",default=False)
 parser.add_argument("--dedup",action=argparse.BooleanOptionalAction ,default=False,help="deduplication of the responses")
+parser.add_argument("--use_gt",action=argparse.BooleanOptionalAction ,default=False,help="force the use of gt for to upload to hf")
 
 args = parser.parse_args()
 train_data, val_data, test_data = get_dataset(args.base_path,arc_2=args.arc2)
@@ -69,7 +70,7 @@ def sampling_given_initial_correctness(data, N,split="train"):
         for response in v:
             # only sample from correct refined responses 
             correct_to_use = response["correct_train_input"]
-            if split == "train":
+            if split == "train" :
                 correct_to_use = response["correct_train_input"] + response["correct_test_input"]
             if all(correct_to_use):
                 if response["type"] == "refined" :
@@ -454,8 +455,10 @@ for filename in tqdm(list_files_keep):
             print("loading",filename)
             data = pickle.load(f)
             data = to_formated_list(data)
-            
-            all_results += clean_repair_data(data,split=args.split,keep_correct=keep_correct)
+            split = args.split 
+            if args.use_gt:
+                split = "train"
+            all_results += clean_repair_data(data,split=split,keep_correct=keep_correct)
     except:
         print(f"error: can't load {file2open}")
 
@@ -487,7 +490,10 @@ print("sampling mode:",args.sample_mode)
 if args.sample_mode == "uniform":
     data_train = sampling_uniform(all_results, args.N_sample_task)
 elif args.sample_mode == "diverse":
-    data_train = sampling_given_initial_correctness(all_results, args.N_sample_task, split = args.split)
+    split = args.split
+    if args.use_gt:
+        split = "train"
+    data_train = sampling_given_initial_correctness(all_results, args.N_sample_task, split = split)
 elif args.sample_mode == "sample_close_1":
     data_train = sample_close_1(all_results, args.N_sample_task)
 elif args.sample_mode == "sample_close_2":
