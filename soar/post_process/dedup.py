@@ -18,6 +18,7 @@ parser.add_argument("--path_save", type=str)
 parser.add_argument("--path_embed_model", type=str, default="/home/flowers/work/hf/CodeRankEmbed")
 parser.add_argument("--arc2", action=argparse.BooleanOptionalAction, help="arc 2",default=False)
 parser.add_argument("--split", type=str, help="split train val",default="train")
+parser.add_argument("--bs", type=int, help="batch size",default=1)
 
 args = parser.parse_args()
 
@@ -66,8 +67,8 @@ def get_deduplicate_output_one_task(task):
             result["predicted_test_output"]
             )
         list_out_str = str(list_out)
-        if list_out_str in dic_unique_output:
-            dic_unique_output[list_out_str] = result
+        # if list_out_str in dic_unique_output:
+        dic_unique_output[list_out_str] = result
     return list(dic_unique_output.values())
 
 def rm_exact_code(list_resp):
@@ -105,7 +106,10 @@ def filter(list_resp,list_embed):
     list_is_incorrect = [id_resp for id_resp,resp in enumerate(list_resp) if not all(resp["correct_test_input"] + resp["correct_train_input"])]
     list_resp_incorrect = [list_resp[id_resp] for id_resp in list_is_incorrect]
 
-    list_id_keep_incorrect = get_deduplicate_output_one_task(list_resp_incorrect)
+
+    # list_id_keep_incorrect = get_deduplicate_output_one_task(list_resp_incorrect)
+    list_id_keep_incorrect = list(range(len(list_resp_incorrect)))
+    
     list_embed_incorrect = [list_embed[id_resp] for id_resp in list_is_incorrect]
 
     filtered_list_resp += [list_resp_incorrect[id_resp] for id_resp in list_id_keep_incorrect]
@@ -116,13 +120,13 @@ def filter(list_resp,list_embed):
 def dedup_incorrect_task_output(list_resp):
     """dedup based on output grid"""
     # first remove exact code duplicates
-    list_is_incorrect = [id_resp for id_resp,resp in enumerate(list_resp) if not all(resp["correct_test_input"] + resp["correct_train_input"])]
+    list_is_incorrect = [id_resp for id_resp, resp in enumerate(list_resp) if not all(resp["correct_test_input"] + resp["correct_train_input"])]
     list_resp_incorrect = [list_resp[id_resp] for id_resp in list_is_incorrect]
-    list_id_keep_incorrect = get_deduplicate_output_one_task(list_resp_incorrect)
-    list_resp_incorrect = [list_resp_incorrect[id_resp] for id_resp in list_id_keep_incorrect]
+    list_resp_incorrect_deduped = get_deduplicate_output_one_task(list_resp_incorrect)
     list_correct = [resp for resp in list_resp if all(resp["correct_test_input"] + resp["correct_train_input"])]
-    list_all_resp = list_correct + list_resp_incorrect
+    list_all_resp = list_correct + list_resp_incorrect_deduped
     return list_all_resp
+
 
 all_resp = {k: [] for k in list_k}
 all_embed = {k: [] for k in list_k}
@@ -153,8 +157,9 @@ for k in tqdm(list_k):
     list_resp = rm_exact_code(list_resp)
     list_resp = dedup_incorrect_task_output(list_resp)
     list_code = [resp["code"].strip() for resp in list_resp]
-    list_feat = model.encode(list_code,batch_size=1,transfer_to_cpu=True,convert_to_numpy=True)#encode_in_batches(model, list_code)
+    list_feat = model.encode(list_code,batch_size=args.bs,transfer_to_cpu=True,convert_to_numpy=True)#encode_in_batches(model, list_code)
     # Normalize the vectors (required for cosine similarity)
+    print(len(list_resp), len(list_feat))
     normalized_embeddings = list_feat / np.linalg.norm(list_feat, axis=1, keepdims=True)
     all_embed[k] = normalized_embeddings
     resp_f, emb_f = filter(list_resp, all_embed[k])
